@@ -11,6 +11,7 @@ import {
   FileText,
   BarChart3,
   Settings,
+  ClipboardList,
 } from 'lucide-react'
 
 const navItems = [
@@ -18,6 +19,7 @@ const navItems = [
   { href: '/lancamentos', label: 'Lançamentos', icon: ArrowLeftRight },
   { href: '/contas-fixas', label: 'Contas Fixas', icon: Receipt },
   { href: '/prestadores', label: 'Prestadores', icon: Users },
+  { href: '/holerite', label: 'Holerite', icon: ClipboardList },
   { href: '/contratos', label: 'Contratos', icon: FileText },
   { href: '/clientes', label: 'Clientes', icon: UserRound },
   { href: '/relatorios', label: 'Relatórios', icon: BarChart3 },

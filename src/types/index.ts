@@ -51,6 +51,17 @@ export interface Prestador {
   valor_combinado: number | null
   status: PrestadorStatus
   observacoes: string | null
+  data_nascimento: string | null
+  created_at: string
+}
+
+export interface Bonificacao {
+  id: string
+  prestador_id: string
+  mes: number
+  ano: number
+  valor: number
+  descricao: string | null
   created_at: string
 }
 

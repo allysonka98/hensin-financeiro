@@ -50,6 +50,7 @@ export async function criarPrestador(
       : null,
     status: (formData.get('status') as PrestadorStatus) || 'ativo',
     observacoes: (formData.get('observacoes') as string) || null,
+    data_nascimento: (formData.get('data_nascimento') as string) || null,
   })
 
   if (error) return { error: error.message }
@@ -83,6 +84,7 @@ export async function atualizarPrestador(
         : null,
       status: formData.get('status') as PrestadorStatus,
       observacoes: (formData.get('observacoes') as string) || null,
+      data_nascimento: (formData.get('data_nascimento') as string) || null,
     })
     .eq('id', id)
 
@@ -144,6 +146,31 @@ export async function lancarPagamentoPrestador(
   revalidatePath('/prestadores', 'layout')
   revalidatePath('/lancamentos')
   return undefined
+}
+
+export async function salvarBonificacao(
+  prestadorId: string,
+  mes: number,
+  ano: number,
+  valor: number,
+  descricao: string | null
+): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('bonificacoes').upsert(
+    { prestador_id: prestadorId, mes, ano, valor, descricao },
+    { onConflict: 'prestador_id,mes,ano' }
+  )
+  if (error) return { error: error.message }
+  revalidatePath('/prestadores')
+  return {}
+}
+
+export async function excluirBonificacao(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { error } = await supabase.from('bonificacoes').delete().eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/prestadores')
+  return {}
 }
 
 export async function salvarRecibo(

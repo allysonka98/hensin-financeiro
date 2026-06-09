@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import PrestadoresClient from './_components/PrestadoresClient'
-import type { Prestador } from '@/types'
+import type { Prestador, Bonificacao } from '@/types'
 
 export type PrestadorComStatus = Prestador & {
   status_mes: 'pago' | 'pendente'
@@ -17,15 +17,17 @@ export default async function PrestadoresPage() {
     .toISOString()
     .split('T')[0]
 
-  const [{ data: prestadores }, { data: lancamentos }] = await Promise.all([
-    supabase.from('prestadores').select('*').order('nome'),
-    supabase
-      .from('lancamentos')
-      .select('prestador_id, status')
-      .not('prestador_id', 'is', null)
-      .gte('data_competencia', startOfMonth)
-      .lte('data_competencia', endOfMonth),
-  ])
+  const [{ data: prestadores }, { data: lancamentos }, { data: bonificacoes }] =
+    await Promise.all([
+      supabase.from('prestadores').select('*').order('nome'),
+      supabase
+        .from('lancamentos')
+        .select('prestador_id, status')
+        .not('prestador_id', 'is', null)
+        .gte('data_competencia', startOfMonth)
+        .lte('data_competencia', endOfMonth),
+      supabase.from('bonificacoes').select('*'),
+    ])
 
   const pagosMes = new Set(
     (lancamentos ?? [])
@@ -40,5 +42,10 @@ export default async function PrestadoresPage() {
     })
   )
 
-  return <PrestadoresClient prestadores={prestadoresComStatus} />
+  return (
+    <PrestadoresClient
+      prestadores={prestadoresComStatus}
+      bonificacoes={(bonificacoes ?? []) as Bonificacao[]}
+    />
+  )
 }

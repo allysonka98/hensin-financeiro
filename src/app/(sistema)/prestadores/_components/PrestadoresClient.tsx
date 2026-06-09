@@ -17,21 +17,28 @@ import {
   UserX,
   AlertCircle,
   FileText,
+  Cake,
+  Award,
 } from 'lucide-react'
 import {
   criarPrestador,
   atualizarPrestador,
   excluirPrestador,
   lancarPagamentoPrestador,
+  salvarBonificacao,
+  excluirBonificacao,
 } from '@/app/actions/prestadores'
+import type { Bonificacao } from '@/types'
 import type { PrestadorComStatus } from '../page'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_PRESTADOR: Record<
-  string,
-  { label: string; cls: string }
-> = {
+const MESES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+const STATUS_PRESTADOR: Record<string, { label: string; cls: string }> = {
   ativo: { label: 'Ativo', cls: 'bg-green-400/15 text-green-400' },
   inativo: { label: 'Inativo', cls: 'bg-gray-600/40 text-gray-400' },
   suspenso: { label: 'Suspenso', cls: 'bg-yellow-400/15 text-yellow-400' },
@@ -77,6 +84,27 @@ function fmt(v: number) {
     style: 'currency',
     currency: 'BRL',
   }).format(v)
+}
+
+function formatDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split('-')
+  return `${day}/${month}/${year}`
+}
+
+const _hoje = new Date()
+const hojeAno = _hoje.getFullYear()
+const hojeMes = _hoje.getMonth() + 1
+const hojeDay = _hoje.getDate()
+
+function isAniversarioHoje(dataNasc: string | null): boolean {
+  if (!dataNasc) return false
+  const parts = dataNasc.split('-')
+  return parseInt(parts[1]) === hojeMes && parseInt(parts[2]) === hojeDay
+}
+
+function isAniversarioMes(dataNasc: string | null): boolean {
+  if (!dataNasc) return false
+  return parseInt(dataNasc.split('-')[1]) === hojeMes
 }
 
 const TODAY = new Date().toISOString().split('T')[0]
@@ -126,6 +154,173 @@ function Modal({
           </button>
         </div>
         <div className="p-6 overflow-y-auto">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Bonificação Modal ────────────────────────────────────────────────────────
+
+function BonificacaoModal({
+  prestador,
+  bonificacoesPrestador,
+  onClose,
+}: {
+  prestador: PrestadorComStatus
+  bonificacoesPrestador: Bonificacao[]
+  onClose: () => void
+}) {
+  const [selectedMes, setSelectedMes] = useState(hojeMes)
+  const [selectedAno, setSelectedAno] = useState(hojeAno)
+  const [valor, setValor] = useState(0)
+  const [descricao, setDescricao] = useState('')
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string>()
+
+  const bonificacaoExistente = bonificacoesPrestador.find(
+    (b) => b.mes === selectedMes && b.ano === selectedAno
+  )
+
+  useEffect(() => {
+    setValor(bonificacaoExistente?.valor ?? 0)
+    setDescricao(bonificacaoExistente?.descricao ?? '')
+  }, [selectedMes, selectedAno, bonificacoesPrestador])
+
+  function handleSalvar() {
+    setError(undefined)
+    if (valor <= 0) {
+      setError('O valor deve ser maior que zero.')
+      return
+    }
+    startTransition(async () => {
+      const result = await salvarBonificacao(
+        prestador.id,
+        selectedMes,
+        selectedAno,
+        valor,
+        descricao || null
+      )
+      if (result?.error) setError(result.error)
+      else onClose()
+    })
+  }
+
+  function handleExcluir() {
+    if (!bonificacaoExistente) return
+    if (
+      !confirm(
+        `Excluir bonificação de ${fmt(bonificacaoExistente.valor)} de ${MESES[selectedMes - 1]}/${selectedAno}?`
+      )
+    )
+      return
+    startTransition(async () => {
+      const result = await excluirBonificacao(bonificacaoExistente.id)
+      if (result?.error) setError(result.error)
+      else onClose()
+    })
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gray-700/50 rounded-lg p-4">
+        <p className="text-white font-medium text-sm">{prestador.nome}</p>
+        <p className="text-gray-400 text-xs">{prestador.funcao}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={LABEL}>Mês</label>
+          <select
+            value={selectedMes}
+            onChange={(e) => setSelectedMes(Number(e.target.value))}
+            className={INPUT}
+          >
+            {MESES.map((m, i) => (
+              <option key={i + 1} value={i + 1}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={LABEL}>Ano</label>
+          <input
+            type="number"
+            min={2020}
+            max={2099}
+            value={selectedAno}
+            onChange={(e) => setSelectedAno(Number(e.target.value))}
+            className={INPUT}
+          />
+        </div>
+      </div>
+
+      {bonificacaoExistente && (
+        <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg px-4 py-2 text-sm text-purple-300">
+          Bonificação existente: {fmt(bonificacaoExistente.valor)}
+        </div>
+      )}
+
+      <div>
+        <label className={LABEL}>Valor (R$)</label>
+        <input
+          type="number"
+          min={0}
+          step="0.01"
+          value={valor || ''}
+          onChange={(e) =>
+            setValor(Math.max(0, Number(e.target.value) || 0))
+          }
+          placeholder="0,00"
+          className={INPUT}
+        />
+      </div>
+
+      <div>
+        <label className={LABEL}>Descrição (opcional)</label>
+        <input
+          type="text"
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="Ex: Bônus de desempenho"
+          className={INPUT}
+        />
+      </div>
+
+      {error && (
+        <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-2">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-3 pt-2">
+        <button
+          onClick={handleSalvar}
+          disabled={isPending}
+          className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded-lg transition-colors text-sm"
+        >
+          {isPending
+            ? 'Salvando...'
+            : bonificacaoExistente
+              ? 'Atualizar bônus'
+              : 'Salvar bônus'}
+        </button>
+        {bonificacaoExistente && (
+          <button
+            onClick={handleExcluir}
+            disabled={isPending}
+            className="bg-red-600/20 hover:bg-red-600/40 text-red-400 font-medium py-2 px-4 rounded-lg transition-colors text-sm"
+          >
+            Excluir
+          </button>
+        )}
+        <button
+          onClick={onClose}
+          disabled={isPending}
+          className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 rounded-lg transition-colors text-sm"
+        >
+          Cancelar
+        </button>
       </div>
     </div>
   )
@@ -272,21 +467,35 @@ function PrestadorForm({
         </div>
       </div>
 
-      {/* Valor combinado */}
-      <div>
-        <label htmlFor="p-valor" className={LABEL}>
-          Valor combinado (R$/mês)
-        </label>
-        <input
-          id="p-valor"
-          name="valor_combinado"
-          type="number"
-          min={0}
-          step="0.01"
-          defaultValue={prestador?.valor_combinado ?? ''}
-          placeholder="0,00"
-          className={INPUT}
-        />
+      {/* Data de Nascimento + Valor combinado */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="p-nasc" className={LABEL}>
+            Data de Nascimento
+          </label>
+          <input
+            id="p-nasc"
+            name="data_nascimento"
+            type="date"
+            defaultValue={prestador?.data_nascimento ?? ''}
+            className={INPUT}
+          />
+        </div>
+        <div>
+          <label htmlFor="p-valor" className={LABEL}>
+            Valor combinado (R$/mês)
+          </label>
+          <input
+            id="p-valor"
+            name="valor_combinado"
+            type="number"
+            min={0}
+            step="0.01"
+            defaultValue={prestador?.valor_combinado ?? ''}
+            placeholder="0,00"
+            className={INPUT}
+          />
+        </div>
       </div>
 
       {/* Dados bancários */}
@@ -749,12 +958,14 @@ type ModalState =
   | { type: 'criar' }
   | { type: 'editar'; prestador: PrestadorComStatus }
   | { type: 'pagar'; prestador: PrestadorComStatus }
+  | { type: 'bonus'; prestador: PrestadorComStatus }
 
 interface Props {
   prestadores: PrestadorComStatus[]
+  bonificacoes: Bonificacao[]
 }
 
-export default function PrestadoresClient({ prestadores }: Props) {
+export default function PrestadoresClient({ prestadores, bonificacoes }: Props) {
   const [modal, setModal] = useState<ModalState>({ type: 'closed' })
   const [filtroStatus, setFiltroStatus] = useState<
     'todos' | 'ativo' | 'inativo' | 'suspenso'
@@ -781,6 +992,11 @@ export default function PrestadoresClient({ prestadores }: Props) {
     setModal({ type: 'pagar', prestador: p })
   }
 
+  function openBonus(p: PrestadorComStatus) {
+    modalKey.current += 1
+    setModal({ type: 'bonus', prestador: p })
+  }
+
   function closeModal() {
     setModal({ type: 'closed' })
   }
@@ -805,6 +1021,9 @@ export default function PrestadoresClient({ prestadores }: Props) {
   const totalValor = ativos.reduce((s, p) => s + (p.valor_combinado ?? 0), 0)
   const pagosMes = ativos.filter((p) => p.status_mes === 'pago').length
   const pendentesMes = ativos.filter((p) => p.status_mes === 'pendente').length
+  const aniversariantesHoje = ativos.filter((p) =>
+    isAniversarioHoje(p.data_nascimento)
+  )
 
   // ── Filtragem ──────────────────────────────────────────────────────────────
 
@@ -819,6 +1038,21 @@ export default function PrestadoresClient({ prestadores }: Props) {
 
   return (
     <>
+      {/* Banner aniversariantes */}
+      {aniversariantesHoje.length > 0 && (
+        <div className="mb-6 flex items-center gap-3 bg-pink-500/10 border border-pink-500/20 rounded-xl px-5 py-3">
+          <span className="text-2xl">🎂</span>
+          <div>
+            <p className="text-pink-300 font-semibold text-sm">
+              Parabéns! Aniversário hoje
+            </p>
+            <p className="text-pink-400/80 text-xs">
+              {aniversariantesHoje.map((p) => p.nome).join(', ')}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
@@ -947,6 +1181,16 @@ export default function PrestadoresClient({ prestadores }: Props) {
               .filter(Boolean)
               .join(' · ')
 
+            const bonusMesAtual = bonificacoes.find(
+              (b) =>
+                b.prestador_id === p.id &&
+                b.mes === hojeMes &&
+                b.ano === hojeAno
+            )
+            const anivHoje = isAniversarioHoje(p.data_nascimento)
+            const anivMes =
+              !anivHoje && isAniversarioMes(p.data_nascimento)
+
             return (
               <div
                 key={p.id}
@@ -992,6 +1236,35 @@ export default function PrestadoresClient({ prestadores }: Props) {
                         {fmt(p.valor_combinado)}
                       </span>
                       <span className="text-gray-500">/mês</span>
+                    </div>
+                  )}
+                  {bonusMesAtual && (
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 text-xs font-medium text-purple-400 bg-purple-400/15 px-1.5 py-0.5 rounded">
+                        Bônus
+                      </span>
+                      <span className="text-purple-300">
+                        {fmt(bonusMesAtual.valor)}
+                      </span>
+                      {bonusMesAtual.descricao && (
+                        <span className="text-gray-500 truncate text-xs">
+                          {bonusMesAtual.descricao}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {p.data_nascimento && (
+                    <div className="flex items-center gap-2">
+                      <Cake className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                      <span className="text-gray-300">
+                        {formatDate(p.data_nascimento)}
+                      </span>
+                      {anivHoje && (
+                        <span title="Aniversário hoje!">🎂</span>
+                      )}
+                      {anivMes && (
+                        <span title="Aniversário este mês">🎁</span>
+                      )}
                     </div>
                   )}
                   {p.email && (
@@ -1040,6 +1313,13 @@ export default function PrestadoresClient({ prestadores }: Props) {
                       Lançar pgto
                     </button>
                   )}
+                  <button
+                    onClick={() => openBonus(p)}
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-purple-400 bg-gray-700/50 hover:bg-purple-400/10 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Award className="w-3.5 h-3.5" />
+                    Bônus
+                  </button>
                   <Link
                     href={`/prestadores/${p.id}`}
                     className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 bg-gray-700/50 hover:bg-blue-400/10 px-3 py-1.5 rounded-lg transition-colors"
@@ -1062,8 +1342,8 @@ export default function PrestadoresClient({ prestadores }: Props) {
         </div>
       )}
 
-      {/* Modal */}
-      {modal.type !== 'closed' && (
+      {/* Modais */}
+      {modal.type !== 'closed' && modal.type !== 'bonus' && (
         <Modal
           key={modalKey.current}
           title={
@@ -1088,6 +1368,22 @@ export default function PrestadoresClient({ prestadores }: Props) {
               onCancel={closeModal}
             />
           )}
+        </Modal>
+      )}
+
+      {modal.type === 'bonus' && (
+        <Modal
+          key={modalKey.current}
+          title={`Bonificação — ${modal.prestador.nome}`}
+          onClose={closeModal}
+        >
+          <BonificacaoModal
+            prestador={modal.prestador}
+            bonificacoesPrestador={bonificacoes.filter(
+              (b) => b.prestador_id === modal.prestador.id
+            )}
+            onClose={closeModal}
+          />
         </Modal>
       )}
     </>
