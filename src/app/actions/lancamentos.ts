@@ -9,7 +9,7 @@ type FormState = { error?: string } | undefined
 async function uploadComprovante(
   supabase: Awaited<ReturnType<typeof createClient>>,
   file: File
-): Promise<string | null> {
+): Promise<{ url: string } | { error: string }> {
   const now = new Date()
   const folder = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
   const ext = file.name.split('.').pop() ?? 'bin'
@@ -19,13 +19,13 @@ async function uploadComprovante(
     .from('comprovantes')
     .upload(path, file, { contentType: file.type, upsert: false })
 
-  if (error) return null
+  if (error) return { error: error.message }
 
   const {
     data: { publicUrl },
   } = supabase.storage.from('comprovantes').getPublicUrl(path)
 
-  return publicUrl
+  return { url: publicUrl }
 }
 
 export async function criarLancamento(
@@ -37,7 +37,9 @@ export async function criarLancamento(
   let comprovante_url: string | null = null
   const file = formData.get('comprovante') as File | null
   if (file && file.size > 0) {
-    comprovante_url = await uploadComprovante(supabase, file)
+    const upload = await uploadComprovante(supabase, file)
+    if ('error' in upload) return { error: `Upload do comprovante falhou: ${upload.error}` }
+    comprovante_url = upload.url
   }
 
   const data_pagamento = (formData.get('data_pagamento') as string) || null
@@ -74,7 +76,9 @@ export async function marcarComoPago(
   let comprovante_url: string | null = null
   const file = formData.get('comprovante') as File | null
   if (file && file.size > 0) {
-    comprovante_url = await uploadComprovante(supabase, file)
+    const upload = await uploadComprovante(supabase, file)
+    if ('error' in upload) return { error: `Upload do comprovante falhou: ${upload.error}` }
+    comprovante_url = upload.url
   }
 
   const data_pagamento =

@@ -33,6 +33,11 @@ const FORMAS_PAGAMENTO: Record<string, string> = {
   dinheiro: 'Dinheiro',
 }
 
+const MESES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
 const STATUS_CONFIG = {
   paga: { label: 'Paga', className: 'bg-green-400/15 text-green-400' },
   pendente: { label: 'Pendente', className: 'bg-yellow-400/15 text-yellow-400' },
@@ -98,30 +103,31 @@ function ContaFixaForm({ conta, onSuccess, onCancel }: ContaFixaFormProps) {
         />
       </div>
 
-      {/* Categoria + Dia vencimento */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="cf-categoria" className={labelCls}>
-            Categoria <span className="text-red-400">*</span>
-          </label>
-          <select
-            id="cf-categoria"
-            name="categoria"
-            required
-            defaultValue={conta?.categoria ?? ''}
-            className={inputCls}
-          >
-            <option value="" disabled>
-              Selecione
+      {/* Categoria */}
+      <div>
+        <label htmlFor="cf-categoria" className={labelCls}>
+          Categoria <span className="text-red-400">*</span>
+        </label>
+        <select
+          id="cf-categoria"
+          name="categoria"
+          required
+          defaultValue={conta?.categoria ?? ''}
+          className={inputCls}
+        >
+          <option value="" disabled>
+            Selecione
+          </option>
+          {Object.entries(CATEGORIAS).map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
             </option>
-            {Object.entries(CATEGORIAS).map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </div>
+          ))}
+        </select>
+      </div>
 
+      {/* Vencimento */}
+      <div className={`grid gap-3 ${conta ? 'grid-cols-1' : 'grid-cols-3'}`}>
         <div>
           <label htmlFor="cf-dia" className={labelCls}>
             Dia vencimento <span className="text-red-400">*</span>
@@ -138,6 +144,45 @@ function ContaFixaForm({ conta, onSuccess, onCancel }: ContaFixaFormProps) {
             className={inputCls}
           />
         </div>
+
+        {!conta && (
+          <>
+            <div>
+              <label htmlFor="cf-mes" className={labelCls}>
+                Mês <span className="text-red-400">*</span>
+              </label>
+              <select
+                id="cf-mes"
+                name="mes_vencimento"
+                required
+                defaultValue={new Date().getMonth() + 1}
+                className={inputCls}
+              >
+                {MESES.map((nome, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="cf-ano" className={labelCls}>
+                Ano <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="cf-ano"
+                name="ano_vencimento"
+                type="number"
+                required
+                min={2000}
+                max={2100}
+                defaultValue={new Date().getFullYear()}
+                className={inputCls}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Valor + Forma pgto */}

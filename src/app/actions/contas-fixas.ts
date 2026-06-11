@@ -31,9 +31,9 @@ export async function criarContaFixa(
   if (error) return { error: error.message }
 
   const now = new Date()
-  const ano = now.getFullYear()
-  const mes = now.getMonth() + 1
-  const daysInMonth = new Date(ano, mes, 0).getDate()
+  const anoVenc = Number(formData.get('ano_vencimento')) || now.getFullYear()
+  const mesVenc = Number(formData.get('mes_vencimento')) || (now.getMonth() + 1)
+  const daysInMonth = new Date(anoVenc, mesVenc, 0).getDate()
   const dia = Math.min(contaFixa.dia_vencimento, daysInMonth)
 
   await supabase.from('lancamentos').insert({
@@ -41,7 +41,7 @@ export async function criarContaFixa(
     categoria: 'conta_fixa' as const,
     descricao: contaFixa.nome,
     valor: contaFixa.valor_estimado,
-    data_competencia: `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
+    data_competencia: `${anoVenc}-${String(mesVenc).padStart(2, '0')}-${String(dia).padStart(2, '0')}`,
     status: 'pendente' as const,
     forma_pagamento: contaFixa.forma_pagamento,
     conta_fixa_id: contaFixa.id,
