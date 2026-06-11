@@ -148,8 +148,10 @@ function LancamentoForm({
   const [error, setError] = useState<string | undefined>()
   const [isPending, startTransition] = useTransition()
 
-  function handleAction(formData: FormData) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setError(undefined)
+    const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       const result = await criarLancamento(undefined, formData)
       if (result?.error) {
@@ -161,7 +163,7 @@ function LancamentoForm({
   }
 
   return (
-    <form action={handleAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Tipo */}
       <div>
         <label className={LABEL}>
@@ -402,8 +404,10 @@ function PagarForm({
   const [isPending, startTransition] = useTransition()
   const action = marcarComoPago.bind(null, lancamento.id)
 
-  function handleAction(formData: FormData) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
     setError(undefined)
+    const formData = new FormData(e.currentTarget)
     startTransition(async () => {
       const result = await action(undefined, formData)
       if (result?.error) {
@@ -415,7 +419,7 @@ function PagarForm({
   }
 
   return (
-    <form action={handleAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       {/* Resumo do lançamento */}
       <div className="bg-gray-700/50 rounded-lg p-4 space-y-1">
         <p className="text-gray-300 text-sm">{lancamento.descricao}</p>

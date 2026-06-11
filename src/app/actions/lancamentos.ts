@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { refresh } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { LancamentoCategoria, LancamentoTipo, FormaPagamento } from '@/types'
 
@@ -60,7 +60,7 @@ export async function criarLancamento(
 
   if (error) return { error: error.message }
 
-  revalidatePath('/lancamentos')
+  refresh()
   return undefined
 }
 
@@ -91,7 +91,7 @@ export async function marcarComoPago(
 
   if (error) return { error: error.message }
 
-  revalidatePath('/lancamentos')
+  refresh()
   return undefined
 }
 
@@ -99,6 +99,6 @@ export async function excluirLancamento(id: string): Promise<FormState> {
   const supabase = await createClient()
   const { error } = await supabase.from('lancamentos').delete().eq('id', id)
   if (error) return { error: error.message }
-  revalidatePath('/lancamentos')
+  refresh()
   return undefined
 }
