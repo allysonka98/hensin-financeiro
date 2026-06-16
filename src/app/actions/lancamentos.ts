@@ -2,28 +2,45 @@
 
 import { refresh } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import type { LancamentoCategoria, LancamentoTipo, FormaPagamento } from '@/types'
 
 type FormState = { error?: string } | undefined
 
 async function uploadComprovante(
-  supabase: Awaited<ReturnType<typeof createClient>>,
   file: File
 ): Promise<{ url: string } | { error: string }> {
+  const adminSupabase = createAdminClient()
+  const supabase = adminSupabase || (await createClient())
+
   const now = new Date()
-  const folder = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
+  const folder =
+    `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}`
+
   const ext = file.name.split('.').pop() ?? 'bin'
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+  const path =
+    `${folder}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`
 
   const { error } = await supabase.storage
     .from('comprovantes')
-    .upload(path, file, { contentType: file.type, upsert: false })
+    .upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    })
 
-  if (error) return { error: error.message }
+  if (error) {
+    console.error('Erro no upload:', error)
+    return { error: error.message }
+  }
 
   const {
     data: { publicUrl },
-  } = supabase.storage.from('comprovantes').getPublicUrl(path)
+  } = supabase.storage
+    .from('comprovantes')
+    .getPublicUrl(path)
 
   return { url: publicUrl }
 }
@@ -35,34 +52,87 @@ export async function criarLancamento(
   const supabase = await createClient()
 
   let comprovante_url: string | null = null
+
   const file = formData.get('comprovante') as File | null
+
   if (file && file.size > 0) {
-    const upload = await uploadComprovante(supabase, file)
-    if ('error' in upload) return { error: `Upload do comprovante falhou: ${upload.error}` }
+    const upload = await uploadComprovante(file)
+
+    if ('error' in upload) {
+      return {
+        error: `Upload do comprovante falhou: ${upload.error}`,
+      }
+    }
+
     comprovante_url = upload.url
   }
 
-  const data_pagamento = (formData.get('data_pagamento') as string) || null
-  const status = data_pagamento ? 'pago' : 'pendente'
+  const data_pagamento =
+    (formData.get('data_pagamento') as string) || null
 
-  const { error } = await supabase.from('lancamentos').insert({
-    tipo: formData.get('tipo') as LancamentoTipo,
-    categoria: formData.get('categoria') as LancamentoCategoria,
-    descricao: formData.get('descricao') as string,
-    valor: Number(formData.get('valor')),
-    data_competencia: formData.get('data_competencia') as string,
-    data_pagamento,
-    status,
-    forma_pagamento: (formData.get('forma_pagamento') as FormaPagamento) || null,
-    conta_fixa_id: (formData.get('conta_fixa_id') as string) || null,
-    prestador_id: (formData.get('prestador_id') as string) || null,
-    observacoes: (formData.get('observacoes') as string) || null,
-    comprovante_url,
-  })
+  const status =
+    data_pagamento ? 'pago' : 'pendente'
 
-  if (error) return { error: error.message }
+  const { error } =
+    await supabase
+      .from('lancamentos')
+      .insert({
+        tipo:
+          formData.get('tipo') as LancamentoTipo,
+
+        categoria:
+          formData.get(
+            'categoria'
+          ) as LancamentoCategoria,
+
+        descricao:
+          formData.get(
+            'descricao'
+          ) as string,
+
+        valor: Number(
+          formData.get('valor')
+        ),
+
+        data_competencia:
+          formData.get(
+            'data_competencia'
+          ) as string,
+
+        data_pagamento,
+
+        status,
+
+        forma_pagamento:
+          (formData.get(
+            'forma_pagamento'
+          ) as FormaPagamento) || null,
+
+        conta_fixa_id:
+          (formData.get(
+            'conta_fixa_id'
+          ) as string) || null,
+
+        prestador_id:
+          (formData.get(
+            'prestador_id'
+          ) as string) || null,
+
+        observacoes:
+          (formData.get(
+            'observacoes'
+          ) as string) || null,
+
+        comprovante_url,
+      })
+
+  if (error)
+    return {
+      error: error.message,
+    }
 
   refresh()
+
   return undefined
 }
 
@@ -71,38 +141,241 @@ export async function marcarComoPago(
   _state: FormState,
   formData: FormData
 ): Promise<FormState> {
-  const supabase = await createClient()
+  const supabase =
+    await createClient()
 
-  let comprovante_url: string | null = null
-  const file = formData.get('comprovante') as File | null
-  if (file && file.size > 0) {
-    const upload = await uploadComprovante(supabase, file)
-    if ('error' in upload) return { error: `Upload do comprovante falhou: ${upload.error}` }
-    comprovante_url = upload.url
+  let comprovante_url:
+    | string
+    | null = null
+
+  const file =
+    formData.get(
+      'comprovante'
+    ) as File | null
+
+  if (
+    file &&
+    file.size > 0
+  ) {
+    const upload =
+      await uploadComprovante(
+        file
+      )
+
+    if (
+      'error' in upload
+    ) {
+      return {
+        error: `Upload do comprovante falhou: ${upload.error}`,
+      }
+    }
+
+    comprovante_url =
+      upload.url
   }
 
   const data_pagamento =
-    (formData.get('data_pagamento') as string) ||
-    new Date().toISOString().split('T')[0]
+    (formData.get(
+      'data_pagamento'
+    ) as string) ||
+    new Date()
+      .toISOString()
+      .split('T')[0]
 
-  const update: Record<string, unknown> = { status: 'pago', data_pagamento }
-  if (comprovante_url) update.comprovante_url = comprovante_url
+  const update:
+    Record<
+      string,
+      unknown
+    > = {
+      status: 'pago',
+      data_pagamento,
+    }
 
-  const { error } = await supabase
-    .from('lancamentos')
-    .update(update)
-    .eq('id', id)
+  if (
+    comprovante_url
+  ) {
+    update.comprovante_url =
+      comprovante_url
+  }
 
-  if (error) return { error: error.message }
+  const {
+    error,
+  } =
+    await supabase
+      .from(
+        'lancamentos'
+      )
+      .update(update)
+      .eq('id', id)
+
+  if (error)
+    return {
+      error:
+        error.message,
+    }
 
   refresh()
+
   return undefined
 }
 
-export async function excluirLancamento(id: string): Promise<FormState> {
-  const supabase = await createClient()
-  const { error } = await supabase.from('lancamentos').delete().eq('id', id)
-  if (error) return { error: error.message }
+export async function editarLancamento(
+  id: string,
+  _state: FormState,
+  formData: FormData
+): Promise<FormState> {
+  const supabase =
+    await createClient()
+
+  let comprovante_url =
+    (formData.get(
+      'comprovante_url_atual'
+    ) as string) ||
+    null
+
+  const file =
+    formData.get(
+      'comprovante'
+    ) as File | null
+
+  if (
+    file &&
+    file.size > 0
+  ) {
+    const upload =
+      await uploadComprovante(
+        file
+      )
+
+    if (
+      'error' in upload
+    ) {
+      return {
+        error: `Upload do comprovante falhou: ${upload.error}`,
+      }
+    }
+
+    comprovante_url =
+      upload.url
+  }
+
+  const data_pagamento =
+    (formData.get(
+      'data_pagamento'
+    ) as string) ||
+    null
+
+  const status =
+    data_pagamento
+      ? 'pago'
+      : 'pendente'
+
+  const {
+    error,
+  } =
+    await supabase
+      .from(
+        'lancamentos'
+      )
+      .update({
+        tipo:
+          formData.get(
+            'tipo'
+          ) as LancamentoTipo,
+
+        categoria:
+          formData.get(
+            'categoria'
+          ) as LancamentoCategoria,
+
+        descricao:
+          formData.get(
+            'descricao'
+          ) as string,
+
+        valor: Number(
+          formData.get(
+            'valor'
+          )
+        ),
+
+        data_competencia:
+          formData.get(
+            'data_competencia'
+          ) as string,
+
+        data_pagamento,
+
+        status,
+
+        forma_pagamento:
+          (formData.get(
+            'forma_pagamento'
+          ) as FormaPagamento) ||
+          null,
+
+        conta_fixa_id:
+          (formData.get(
+            'conta_fixa_id'
+          ) as string) ||
+          null,
+
+        prestador_id:
+          (formData.get(
+            'prestador_id'
+          ) as string) ||
+          null,
+
+        observacoes:
+          (formData.get(
+            'observacoes'
+          ) as string) ||
+          null,
+
+        comprovante_url,
+      })
+      .eq(
+        'id',
+        id
+      )
+
+  if (error)
+    return {
+      error:
+        error.message,
+    }
+
   refresh()
+
+  return undefined
+}
+
+export async function excluirLancamento(
+  id: string
+): Promise<FormState> {
+  const supabase =
+    await createClient()
+
+  const {
+    error,
+  } =
+    await supabase
+      .from(
+        'lancamentos'
+      )
+      .delete()
+      .eq(
+        'id',
+        id
+      )
+
+  if (error)
+    return {
+      error:
+        error.message,
+    }
+
+  refresh()
+
   return undefined
 }
