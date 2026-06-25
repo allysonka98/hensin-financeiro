@@ -16,7 +16,7 @@ import {
   ExternalLink,
   Loader2,
 } from 'lucide-react'
-import { salvarRecibo, editarLancamentoPrestador } from '@/app/actions/prestadores'
+import { salvarRecibo} from '@/app/actions/prestadores'
 import type { Lancamento, Prestador } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
