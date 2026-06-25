@@ -16,7 +16,7 @@ import {
   ExternalLink,
   Loader2,
 } from 'lucide-react'
-import { salvarRecibo } from '@/app/actions/prestadores'
+import { salvarRecibo, editarLancamentoPrestador } from '@/app/actions/prestadores'
 import type { Lancamento, Prestador } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -47,7 +47,14 @@ const TIPO_PAGAMENTO: Record<string, string> = {
   outro: 'Outro',
 }
 
-const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+const STATUS_CONFIG: Record<
+  string,
+  {
+    label: string
+    cls: string
+    icon: React.ReactNode
+  }
+> = {
   pago: {
     label: 'Pago',
     cls: 'bg-green-400/15 text-green-400',
@@ -80,7 +87,12 @@ function fmtDate(iso: string): string {
 
 function fmtMesAno(iso: string): string {
   const [y, m] = iso.split('-')
-  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('pt-BR', {
+
+  return new Date(
+    Number(y),
+    Number(m) - 1,
+    1
+  ).toLocaleDateString('pt-BR', {
     month: 'long',
     year: 'numeric',
   })
@@ -88,10 +100,13 @@ function fmtMesAno(iso: string): string {
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
+
   let binary = ''
+
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i])
   }
+
   return btoa(binary)
 }
 
@@ -102,526 +117,694 @@ async function generateReciboPDF(
   prestador: Prestador
 ): Promise<Blob> {
   const { jsPDF } = await import('jspdf')
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+
+  const doc = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+  })
 
   const PW = 210
   const L = 20
   const R = 190
+
   let y = 22
 
   const setBold = (size: number) => {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(size)
   }
+
   const setNormal = (size: number) => {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(size)
   }
-  const hLine = (yy: number) => doc.line(L, yy, R, yy)
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  const hLine = (yy: number) => {
+    doc.line(L, yy, R, yy)
+  }
+
+  // Header
+
   setBold(18)
+
   doc.setTextColor(30, 30, 30)
-  doc.text('HENSIN ADVOGADOS', PW / 2, y, { align: 'center' })
+
+  doc.text(
+    'HENSIN ADVOGADOS',
+    PW / 2,
+    y,
+    {
+      align: 'center',
+    }
+  )
+
   y += 7
 
   setNormal(10)
+
   doc.setTextColor(80, 80, 80)
-  doc.text('RECIBO DE PAGAMENTO DE SERVICOS', PW / 2, y, { align: 'center' })
+
+  doc.text(
+    'RECIBO DE PAGAMENTO DE SERVICOS',
+    PW / 2,
+    y,
+    {
+      align: 'center',
+    }
+  )
+
   y += 7
 
   doc.setDrawColor(180, 180, 180)
+
   hLine(y)
+
   y += 5
 
-  // Numero + Data + Local
-  const reciboNum = `REC-${lancamento.data_competencia.substring(0, 7).replace('-', '/')}-${lancamento.id.substring(0, 8).toUpperCase()}`
+  const reciboNum =
+    `REC-${
+      lancamento.data_competencia
+        .substring(0, 7)
+        .replace('-', '/')
+    }-${
+      lancamento.id
+        .substring(0, 8)
+        .toUpperCase()
+    }`
+
   setNormal(8)
+
   doc.setTextColor(100, 100, 100)
-  doc.text(`No: ${reciboNum}`, L, y)
-  doc.text(`Data: ${fmtDate(lancamento.data_competencia)}`, PW / 2, y, { align: 'center' })
-  doc.text('Local: Guarulhos, SP', R, y, { align: 'right' })
-  y += 8
 
-  doc.setDrawColor(180, 180, 180)
-  hLine(y)
-  y += 6
-
-  // ── Dados do prestador ─────────────────────────────────────────────────────
-  setBold(9)
-  doc.setTextColor(30, 30, 30)
-  doc.text('DADOS DO PRESTADOR', L, y)
-  y += 5
-
-  setNormal(9)
-  doc.setTextColor(50, 50, 50)
-  doc.text(`Nome: ${prestador.nome}`, L, y); y += 5
-  doc.text(`CPF/CNPJ: ${prestador.cpf_cnpj}`, L, y); y += 5
-  doc.text(`Cargo/Funcao: ${prestador.funcao}`, L, y); y += 8
-
-  doc.setDrawColor(180, 180, 180)
-  hLine(y)
-  y += 6
-
-  // ── Referencia ─────────────────────────────────────────────────────────────
-  setBold(9)
-  doc.setTextColor(30, 30, 30)
-  doc.text('REFERENCIA DO PAGAMENTO', L, y)
-  y += 5
-
-  setNormal(9)
-  doc.setTextColor(50, 50, 50)
-  const mesComp = fmtMesAno(lancamento.data_competencia)
-  doc.text(`Competencia: ${mesComp}`, L, y)
-  const tipoLabel =
-    TIPO_PAGAMENTO[lancamento.tipo_pagamento ?? ''] ??
-    lancamento.tipo_pagamento ??
-    '-'
-  doc.text(`Tipo: ${tipoLabel}`, PW / 2, y)
-  y += 8
-
-  doc.setDrawColor(180, 180, 180)
-  hLine(y)
-  y += 6
-
-  // ── Discriminacao dos valores ──────────────────────────────────────────────
-  setBold(9)
-  doc.setTextColor(30, 30, 30)
-  doc.text('DISCRIMINACAO DOS VALORES', L, y)
-  y += 5
-
-  doc.setTextColor(50, 50, 50)
-  const hasBreakdown = lancamento.valor_fixo != null
-
-  if (hasBreakdown) {
-    setNormal(9)
-    doc.text('Valor fixo combinado:', L + 4, y)
-    doc.text(fmt(lancamento.valor_fixo!), R, y, { align: 'right' })
-    y += 5
-
-    const adic = lancamento.valor_adicional ?? 0
-    if (adic > 0) {
-      const adicLabel = lancamento.motivo_adicional
-        ? `Adicional (${lancamento.motivo_adicional}):`
-        : 'Adicional:'
-      doc.text(adicLabel, L + 4, y)
-      doc.text(fmt(adic), R, y, { align: 'right' })
-      y += 5
-    }
-
-    doc.setDrawColor(150, 150, 150)
-    doc.line(L + 4, y, R, y)
-    y += 4
-
-    setBold(10)
-    doc.setTextColor(20, 20, 20)
-    doc.text('TOTAL LIQUIDO:', L + 4, y)
-    doc.text(fmt(lancamento.valor), R, y, { align: 'right' })
-    y += 8
-  } else {
-    setNormal(9)
-    doc.text('Valor do pagamento:', L + 4, y)
-    setBold(10)
-    doc.setTextColor(20, 20, 20)
-    doc.text(fmt(lancamento.valor), R, y, { align: 'right' })
-    y += 8
-  }
-
-  doc.setDrawColor(180, 180, 180)
-  hLine(y)
-  y += 6
-
-  // ── Forma de pagamento ─────────────────────────────────────────────────────
-  setBold(9)
-  doc.setTextColor(30, 30, 30)
-  doc.text('FORMA DE PAGAMENTO', L, y)
-  y += 5
-
-  setNormal(9)
-  doc.setTextColor(50, 50, 50)
-  const formaLabel =
-    FORMAS_PAGAMENTO[lancamento.forma_pagamento ?? ''] ??
-    lancamento.forma_pagamento ??
-    'Nao informado'
-  doc.text(`Forma: ${formaLabel}`, L, y)
-  if (prestador.pix) {
-    doc.text(`Chave PIX: ${prestador.pix}`, PW / 2, y)
-  }
-  y += 5
-
-  if (lancamento.observacoes) {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(8)
-    doc.setTextColor(100, 100, 100)
-    const lines = doc.splitTextToSize(`Obs: ${lancamento.observacoes}`, R - L)
-    doc.text(lines, L, y)
-    y += (lines.length as number) * 4.5
-  }
-
-  y += 8
-  doc.setDrawColor(180, 180, 180)
-  hLine(y)
-  y += 10
-
-  // ── Assinaturas ────────────────────────────────────────────────────────────
-  const today = new Date().toLocaleDateString('pt-BR', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  setNormal(9)
-  doc.setTextColor(50, 50, 50)
-  doc.text(`Guarulhos, ${today}`, PW / 2, y, { align: 'center' })
-  y += 14
-
-  const cX1 = L + (R - L) * 0.25
-  const cX2 = L + (R - L) * 0.75
-  const sigHalf = 38
-
-  doc.setDrawColor(80, 80, 80)
-  doc.line(cX1 - sigHalf, y, cX1 + sigHalf, y)
-  doc.line(cX2 - sigHalf, y, cX2 + sigHalf, y)
-  y += 5
-
-  setNormal(8)
-  doc.setTextColor(50, 50, 50)
-  doc.text(prestador.nome, cX1, y, { align: 'center' })
-  doc.text('Hensin Advogados', cX2, y, { align: 'center' })
-  y += 4
-
-  doc.setFontSize(7.5)
-  doc.setTextColor(120, 120, 120)
-  doc.text('Assinatura do Prestador', cX1, y, { align: 'center' })
-  doc.text('Responsavel pelo Escritorio', cX2, y, { align: 'center' })
-  y += 14
-
-  // ── Rodape ─────────────────────────────────────────────────────────────────
-  doc.setDrawColor(200, 200, 200)
-  hLine(y)
-  y += 4
-
-  doc.setFontSize(7)
-  doc.setTextColor(160, 160, 160)
   doc.text(
-    `Documento gerado automaticamente pelo sistema Hensin Financeiro em ${new Date().toLocaleString('pt-BR')}`,
+    `No: ${reciboNum}`,
+    L,
+    y
+  )
+
+  doc.text(
+    `Data: ${fmtDate(lancamento.data_competencia)}`,
     PW / 2,
     y,
-    { align: 'center' }
+    {
+      align: 'center',
+    }
   )
 
-  return doc.output('blob') as Blob
+  doc.text(
+    'Local: Guarulhos, SP',
+    R,
+    y,
+    {
+      align: 'right',
+    }
+  )
+
+  y += 8  // Corpo
+
+  setBold(12)
+
+  doc.setTextColor(0, 0, 0)
+
+  doc.text(
+    'Recebi da empresa Hensin Advogados',
+    L,
+    y
+  )
+
+  y += 8
+
+  setNormal(11)
+
+  const texto = `
+Eu, ${prestador.nome}, inscrito(a) sob CPF/CNPJ ${prestador.cpf_cnpj},
+declaro que recebi o valor de ${fmt(Number(lancamento.valor))},
+referente ao pagamento de servicos prestados.
+
+Competencia: ${fmtMesAno(lancamento.data_competencia)}
+
+Forma de pagamento:
+${
+  FORMAS_PAGAMENTO_LABEL[
+    lancamento.forma_pagamento
+  ] ??
+  lancamento.forma_pagamento
 }
 
-// ─── Recibo cell ─────────────────────────────────────────────────────────────
+Tipo:
+${
+  TIPO_PAGAMENTO[
+    lancamento.tipo_pagamento
+  ] ??
+  lancamento.tipo_pagamento
+}
+`
 
-function ReciboCell({
-  lancamento,
-  prestador,
-}: {
-  lancamento: Lancamento
-  prestador: Prestador
-}) {
-  const [loading, setLoading] = useState(false)
-  const [reciboUrl, setReciboUrl] = useState<string | null>(
-    lancamento.recibo_url ?? null
+  const split = doc.splitTextToSize(
+    texto,
+    165
   )
-  const [err, setErr] = useState<string | null>(null)
 
-  async function handle() {
-    setLoading(true)
-    setErr(null)
+  doc.text(
+    split,
+    L,
+    y
+  )
+
+  y += split.length * 7
+
+  y += 10
+
+  hLine(y)
+
+  y += 10
+
+  setBold(10)
+
+  doc.text(
+    'Resumo',
+    L,
+    y
+  )
+
+  y += 7
+
+  setNormal(10)
+
+  doc.text(
+    `Prestador: ${prestador.nome}`,
+    L,
+    y
+  )
+
+  y += 7
+
+  doc.text(
+    `Valor pago: ${fmt(Number(lancamento.valor))}`,
+    L,
+    y
+  )
+
+  y += 7
+
+  doc.text(
+    `Data: ${fmtDate(lancamento.data_competencia)}`,
+    L,
+    y
+  )
+
+  y += 20
+
+  hLine(y)
+
+  y += 18
+
+  doc.text(
+    prestador.nome,
+    PW / 2,
+    y,
+    {
+      align: 'center',
+    }
+  )
+
+  y += 6
+
+  doc.text(
+    prestador.cpf_cnpj,
+    PW / 2,
+    y,
+    {
+      align: 'center',
+    }
+  )
+
+  return doc.output('blob')
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+type Props = {
+  prestador: Prestador
+  historico: Lancamento[]
+}
+
+export default function HistoricoClient({
+  prestador,
+  historico,
+}: Props) {
+  const [loadingId, setLoadingId] =
+    useState<string | null>(
+      null
+    )
+
+  async function gerarRecibo(
+    lancamento: Lancamento
+  ) {
     try {
-      const blob = await generateReciboPDF(lancamento, prestador)
+      setLoadingId(
+        lancamento.id
+      )
 
-      // Download
-      const objUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const slug = prestador.nome.replace(/\s+/g, '-').toLowerCase()
-      a.href = objUrl
-      a.download = `recibo-${slug}-${lancamento.data_competencia.substring(0, 7)}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => URL.revokeObjectURL(objUrl), 1000)
+      const pdf =
+        await generateReciboPDF(
+          lancamento,
+          prestador
+        )
 
-      // Salvar no Supabase
-      const arr = await blob.arrayBuffer()
-      const b64 = arrayBufferToBase64(arr)
-      const result = await salvarRecibo(lancamento.id, b64)
-      if (result?.error) {
-        setErr(result.error)
-      } else if (result?.url) {
-        setReciboUrl(result.url)
+      const base64 =
+        arrayBufferToBase64(
+          await pdf.arrayBuffer()
+        )
+
+      const res =
+        await salvarRecibo(
+          lancamento.id,
+          base64
+        )
+
+      if (
+        res?.url
+      ) {
+        window.open(
+          res.url,
+          '_blank'
+        )
       }
-    } catch (e) {
-      setErr('Erro ao gerar recibo.')
-      console.error(e)
     } finally {
-      setLoading(false)
+      setLoadingId(
+        null
+      )
     }
   }
 
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {reciboUrl && (
-        <a
-          href={reciboUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Ver recibo salvo"
-          className="text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      )}
-      <button
-        onClick={handle}
-        disabled={loading}
-        title={reciboUrl ? 'Regenerar recibo' : 'Gerar recibo PDF'}
-        className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-          reciboUrl
-            ? 'text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700'
-            : 'text-purple-400 hover:text-white bg-purple-400/10 hover:bg-purple-500/20 border border-purple-400/20'
-        }`}
-      >
-        {loading ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        ) : (
-          <FileText className="w-3.5 h-3.5" />
-        )}
-        {loading ? 'Gerando...' : reciboUrl ? 'Regenerar' : 'Gerar Recibo'}
-      </button>
-      {err && <p className="text-red-400 text-xs w-full mt-0.5">{err}</p>}
-    </div>
-  )
-}
-
-// ─── Props ────────────────────────────────────────────────────────────────────
-
-interface Props {
-  prestador: Prestador
-  lancamentos: Lancamento[]
-}
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
-export default function HistoricoClient({ prestador, lancamentos }: Props) {
-  const totalPago = lancamentos
-    .filter((l) => l.status === 'pago')
-    .reduce((s, l) => s + l.valor, 0)
-
-  const bankInfo = [
-    prestador.banco,
-    prestador.agencia && `Ag. ${prestador.agencia}`,
-    prestador.conta && `C. ${prestador.conta}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-
-  return (
+  const total =
+    historico.reduce(
+      (
+        acc,
+        item
+      ) =>
+        acc +
+        Number(
+          item.valor
+        ),
+      0
+    )  return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <Link
-        href="/prestadores"
-        className="inline-flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Voltar para Prestadores
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/prestadores"
+          className="
+            inline-flex
+            items-center
+            gap-2
+            text-sm
+            text-zinc-400
+            hover:text-white
+          "
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Voltar
+        </Link>
 
-      {/* Cabeçalho */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-white text-xl font-semibold">{prestador.nome}</h2>
-          <p className="text-gray-400 text-sm mt-0.5">{prestador.funcao}</p>
-        </div>
-        <div className="text-right">
-          <p className="text-gray-500 text-xs uppercase tracking-wider">
+        <div
+          className="
+            rounded-xl
+            border
+            border-zinc-800
+            bg-zinc-900
+            px-4
+            py-2
+          "
+        >
+          <div className="text-xs text-zinc-400">
             Total pago
-          </p>
-          <p className="text-green-400 text-xl font-bold">{fmt(totalPago)}</p>
+          </div>
+
+          <div
+            className="
+              text-lg
+              font-semibold
+            "
+          >
+            {fmt(total)}
+          </div>
         </div>
       </div>
 
-      {/* Card de dados */}
-      <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-        {prestador.cpf_cnpj && (
-          <div>
-            <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">
-              CPF / CNPJ
-            </p>
-            <p className="text-gray-200">{prestador.cpf_cnpj}</p>
+      <div
+        className="
+          rounded-2xl
+          border
+          border-zinc-800
+          bg-zinc-950
+          p-6
+        "
+      >
+        <div className="flex gap-4">
+          <div
+            className="
+              h-14
+              w-14
+              rounded-full
+              bg-cyan-500/15
+              flex
+              items-center
+              justify-center
+            "
+          >
+            <Building2
+              className="
+                w-7
+                h-7
+                text-cyan-400
+              "
+            />
           </div>
-        )}
-        {prestador.valor_combinado != null && (
-          <div className="flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-gray-500 shrink-0" />
-            <div>
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">
-                Valor combinado
-              </p>
-              <p className="text-gray-200">
-                {fmt(prestador.valor_combinado)}/mês
-              </p>
+
+          <div className="flex-1">
+            <h1
+              className="
+                text-2xl
+                font-bold
+              "
+            >
+              {prestador.nome}
+            </h1>
+
+            <div
+              className="
+                mt-2
+                flex
+                flex-wrap
+                gap-4
+                text-sm
+                text-zinc-400
+              "
+            >
+              <span>
+                {prestador.cpf_cnpj}
+              </span>
+
+              {prestador.email && (
+                <span className="flex items-center gap-2">
+                  <Mail className="w-4 h-4" />
+                  {prestador.email}
+                </span>
+              )}
+
+              {prestador.telefone && (
+                <span className="flex items-center gap-2">
+                  <Phone className="w-4 h-4" />
+                  {prestador.telefone}
+                </span>
+              )}
             </div>
           </div>
-        )}
-        {prestador.pix && (
-          <div>
-            <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5">
-              Chave PIX
-            </p>
-            <p className="text-purple-300">{prestador.pix}</p>
-          </div>
-        )}
-        {prestador.email && (
-          <div className="flex items-center gap-2">
-            <Mail className="w-4 h-4 text-gray-500 shrink-0" />
-            <p className="text-gray-200 truncate">{prestador.email}</p>
-          </div>
-        )}
-        {prestador.telefone && (
-          <div className="flex items-center gap-2">
-            <Phone className="w-4 h-4 text-gray-500 shrink-0" />
-            <p className="text-gray-200">{prestador.telefone}</p>
-          </div>
-        )}
-        {bankInfo && (
-          <div className="flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-gray-500 shrink-0" />
-            <p className="text-gray-200 truncate">{bankInfo}</p>
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* Tabela de lançamentos */}
-      <div>
-        <h3 className="text-white font-semibold mb-3 text-base">
-          Histórico de pagamentos
-          <span className="text-gray-500 font-normal text-sm ml-2">
-            ({lancamentos.length} registro{lancamentos.length !== 1 ? 's' : ''})
-          </span>
-        </h3>
+      <div className="space-y-4">
+        {historico.map(
+          (
+            lancamento
+          ) => {
+            const status =
+              STATUS_CONFIG[
+                lancamento.status
+              ]
 
-        {lancamentos.length === 0 ? (
-          <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
-            <p className="text-gray-500 text-sm">
-              Nenhum lançamento encontrado para este prestador.
-            </p>
-          </div>
-        ) : (
-          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    {[
-                      'Competência',
-                      'Descrição',
-                      'Valor',
-                      'Status',
-                      'Comprovante',
-                      'Recibo',
-                    ].map((h, i) => (
-                      <th
-                        key={i}
-                        className={`text-xs font-medium text-gray-400 uppercase tracking-wider px-4 py-3 ${
-                          i === 2 ? 'text-right' : 'text-left'
-                        }`}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {lancamentos.map((l) => {
-                    const statusCfg =
-                      STATUS_CONFIG[l.status] ?? STATUS_CONFIG.cancelado
-                    return (
-                      <tr key={l.id} className="hover:bg-gray-750 transition-colors">
-                        <td className="px-4 py-3 text-gray-300 text-sm whitespace-nowrap">
-                          <p>{fmtMesAno(l.data_competencia)}</p>
-                          <p className="text-gray-500 text-xs">
-                            {fmtDate(l.data_competencia)}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-sm max-w-[220px]">
-                          <p className="text-gray-200 truncate">{l.descricao}</p>
-                          {l.tipo_pagamento && (
-                            <p className="text-gray-500 text-xs mt-0.5">
-                              {TIPO_PAGAMENTO[l.tipo_pagamento] ??
-                                l.tipo_pagamento}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right text-sm font-medium whitespace-nowrap text-green-400">
-                          {fmt(l.valor)}
-                          {l.valor_fixo != null &&
-                            (l.valor_adicional ?? 0) > 0 && (
-                              <p className="text-gray-500 font-normal text-xs">
-                                +{fmt(l.valor_adicional!)} adicional
-                              </p>
-                            )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${statusCfg.cls}`}
-                          >
-                            {statusCfg.icon}
-                            {statusCfg.label}
-                          </span>
-                          {l.data_pagamento && (
-                            <p className="text-gray-500 text-xs mt-0.5">
-                              {fmtDate(l.data_pagamento)}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {l.comprovante_url ? (
-                            <a
-                              href={l.comprovante_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Ver comprovante"
-                              className="inline-flex items-center gap-1.5 text-xs text-green-400 hover:text-green-300 bg-green-400/10 hover:bg-green-400/20 px-2.5 py-1.5 rounded-lg transition-colors"
-                            >
-                              <Paperclip className="w-3.5 h-3.5" />
-                              Ver
-                            </a>
-                          ) : (
-                            <span className="text-gray-600 text-sm">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <ReciboCell
-                            lancamento={l}
-                            prestador={prestador}
-                          />
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-600 bg-gray-700/40">
-                    <td
-                      colSpan={2}
-                      className="px-4 py-3 text-gray-400 text-sm font-medium"
+            return (
+              <div
+                key={
+                  lancamento.id
+                }
+                className="
+                  rounded-2xl
+                  border
+                  border-zinc-800
+                  bg-zinc-950
+                  p-5
+                "
+              >
+                <div
+                  className="
+                    flex
+                    justify-between
+                    gap-4
+                  "
+                >
+                  <div>
+                    <div
+                      className="
+                        flex
+                        items-center
+                        gap-3
+                      "
                     >
-                      Total pago
-                    </td>
-                    <td className="px-4 py-3 text-right text-green-400 text-sm font-bold whitespace-nowrap">
-                      {fmt(totalPago)}
-                    </td>
-                    <td colSpan={3} />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
+                      <DollarSign
+                        className="
+                          w-5
+                          h-5
+                          text-cyan-400
+                        "
+                      />
+
+                      <div
+                        className="
+                          text-lg
+                          font-semibold
+                        "
+                      >
+                        {fmt(
+                          Number(
+                            lancamento.valor
+                          )
+                        )}
+                      </div>
+
+                      <span
+                        className={`
+                          inline-flex
+                          items-center
+                          gap-1
+                          rounded-full
+                          px-2
+                          py-1
+                          text-xs
+                          ${status?.cls}
+                        `}
+                      >
+                        {status?.icon}
+
+                        {status?.label}
+                      </span>
+                    </div>                    <div
+                      className="
+                        mt-2
+                        text-sm
+                        text-zinc-400
+                      "
+                    >
+                      Competência:{' '}
+                      {fmtMesAno(
+                        lancamento.data_competencia
+                      )}
+                    </div>
+
+                    <div
+                      className="
+                        mt-1
+                        text-sm
+                        text-zinc-500
+                      "
+                    >
+                      Forma de pagamento:{' '}
+                      {
+                        FORMAS_PAGAMENTO_LABEL[
+                          lancamento.forma_pagamento
+                        ]
+                      }
+                    </div>
+
+                    <div
+                      className="
+                        mt-1
+                        text-sm
+                        text-zinc-500
+                      "
+                    >
+                      Tipo:{' '}
+                      {
+                        TIPO_PAGAMENTO[
+                          lancamento.tipo_pagamento
+                        ]
+                      }
+                    </div>
+
+                    {lancamento.observacoes && (
+                      <div
+                        className="
+                          mt-4
+                          rounded-xl
+                          bg-zinc-900
+                          p-3
+                          text-sm
+                          text-zinc-300
+                        "
+                      >
+                        {
+                          lancamento.observacoes
+                        }
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    className="
+                      flex
+                      flex-col
+                      items-end
+                      gap-2
+                    "
+                  >
+                    {lancamento.comprovante_url && (
+                      <a
+                        href={
+                          lancamento.comprovante_url
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="
+                          inline-flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          border
+                          border-zinc-700
+                          px-3
+                          py-2
+                          text-sm
+                          hover:bg-zinc-900
+                        "
+                      >
+                        <Paperclip
+                          className="
+                            w-4
+                            h-4
+                          "
+                        />
+
+                        Comprovante
+
+                        <ExternalLink
+                          className="
+                            w-4
+                            h-4
+                          "
+                        />
+                      </a>
+                    )}
+
+                    {lancamento.recibo_url ? (
+                      <a
+                        href={
+                          lancamento.recibo_url
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        className="
+                          inline-flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          bg-cyan-600
+                          px-3
+                          py-2
+                          text-sm
+                        "
+                      >
+                        <FileText
+                          className="
+                            w-4
+                            h-4
+                          "
+                        />
+
+                        Abrir recibo
+                      </a>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          gerarRecibo(
+                            lancamento
+                          )
+                        }
+                        disabled={
+                          loadingId ===
+                          lancamento.id
+                        }
+                        className="
+                          inline-flex
+                          items-center
+                          gap-2
+                          rounded-xl
+                          border
+                          border-cyan-700
+                          px-3
+                          py-2
+                          text-sm
+                          hover:bg-cyan-950
+                        "
+                      >
+                        {loadingId ===
+                        lancamento.id ? (
+                          <Loader2
+                            className="
+                              w-4
+                              h-4
+                              animate-spin
+                            "
+                          />
+                        ) : (
+                          <FileText
+                            className="
+                              w-4
+                              h-4
+                            "
+                          />
+                        )}
+
+                        Gerar recibo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          }
         )}
-      </div>
+      </div>      {historico.length === 0 && (
+        <div
+          className="
+            rounded-2xl
+            border
+            border-dashed
+            border-zinc-800
+            bg-zinc-950
+            p-10
+            text-center
+          "
+        >
+          <div
+            className="
+              text-zinc-500
+            "
+          >
+            Nenhum lançamento encontrado
+          </div>
+        </div>
+      )}
     </div>
   )
 }
