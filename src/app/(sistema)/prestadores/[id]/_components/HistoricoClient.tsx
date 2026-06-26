@@ -15,8 +15,9 @@ import {
   XCircle,
   ExternalLink,
   Loader2,
+  Pencil,
 } from 'lucide-react'
-import { salvarRecibo} from '@/app/actions/prestadores'
+import { salvarRecibo, editarLancamentoPrestador } from '@/app/actions/prestadores'
 import type { Lancamento, Prestador } from '@/types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -312,6 +313,9 @@ async function generateReciboPDF(
   return doc.output('blob') as Blob
 }
 
+const FORMAS_LIST = ['pix', 'transferencia', 'boleto', 'cartao_credito', 'cartao_debito', 'dinheiro']
+const TIPOS_LIST = ['adiantamento', 'parcial', 'final', 'bonus', 'outro']
+
 function EditarLancamentoModal({
   lancamento,
   onClose,
@@ -321,192 +325,135 @@ function EditarLancamentoModal({
   onClose: () => void
   onSaved: (updated: Lancamento) => void
 }) {
-  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [form, setForm] = useState({
+    descricao: lancamento.descricao,
+    valor: String(lancamento.valor),
+    valor_fixo: lancamento.valor_fixo != null ? String(lancamento.valor_fixo) : '',
+    valor_adicional: lancamento.valor_adicional != null ? String(lancamento.valor_adicional) : '0',
+    motivo_adicional: lancamento.motivo_adicional ?? '',
+    data_competencia: lancamento.data_competencia,
+    data_pagamento: lancamento.data_pagamento ?? '',
+    forma_pagamento: lancamento.forma_pagamento ?? '',
+    tipo_pagamento: lancamento.tipo_pagamento ?? '',
+    observacoes: lancamento.observacoes ?? '',
+  })
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaving(true)
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  async function handleSave() {
+    setLoading(true)
     setErr(null)
-
-    const formData = new FormData(e.currentTarget)
-    const result = await editarLancamentoPrestador(lancamento.id, undefined, formData)
-
+    const result = await editarLancamentoPrestador(lancamento.id, {
+      descricao: form.descricao,
+      valor: Number(form.valor),
+      data_competencia: form.data_competencia,
+      data_pagamento: form.data_pagamento || null,
+      forma_pagamento: form.forma_pagamento || null,
+      observacoes: form.observacoes || null,
+      tipo_pagamento: form.tipo_pagamento || null,
+      valor_fixo: form.valor_fixo ? Number(form.valor_fixo) : null,
+      valor_adicional: form.valor_adicional ? Number(form.valor_adicional) : null,
+      motivo_adicional: form.motivo_adicional || null,
+      status: form.data_pagamento ? 'pago' : 'pendente',
+    })
+    setLoading(false)
     if (result?.error) {
       setErr(result.error)
-      setSaving(false)
-    } else {
-      // Montar objeto atualizado localmente para feedback imediato
-      const valorFixo = formData.get("valor_fixo") ? Number(formData.get("valor_fixo")) : null
-      const valorAdicional = formData.get("valor_adicional") ? Number(formData.get("valor_adicional")) : 0
-      onSaved({
-        ...lancamento,
-        descricao: formData.get("descricao") as string,
-        valor: Number(formData.get("valor")),
-        data_competencia: formData.get("data_competencia") as string,
-        data_pagamento: (formData.get("data_pagamento") as string) || null,
-        status: formData.get("data_pagamento") ? "pago" : "pendente",
-        forma_pagamento: (formData.get("forma_pagamento") as string) || null,
-        observacoes: (formData.get("observacoes") as string) || null,
-        valor_fixo: valorFixo,
-        valor_adicional: valorAdicional,
-        motivo_adicional: (formData.get("motivo_adicional") as string) || null,
-        tipo_pagamento: (formData.get("tipo_pagamento") as string) || null,
-      } as Lancamento)
-      onClose()
+      return
     }
+    onSaved({
+      ...lancamento,
+      descricao: form.descricao,
+      valor: Number(form.valor),
+      data_competencia: form.data_competencia,
+      data_pagamento: form.data_pagamento || null,
+      forma_pagamento: form.forma_pagamento as any,
+      observacoes: form.observacoes || null,
+      tipo_pagamento: form.tipo_pagamento || null,
+      valor_fixo: form.valor_fixo ? Number(form.valor_fixo) : null,
+      valor_adicional: form.valor_adicional ? Number(form.valor_adicional) : null,
+      motivo_adicional: form.motivo_adicional || null,
+      status: form.data_pagamento ? 'pago' : 'pendente',
+    })
+    onClose()
   }
 
+  const inp = 'w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500'
+  const lbl = 'text-gray-400 text-xs uppercase tracking-wider mb-1 block'
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-lg shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700">
-          <h3 className="text-white font-semibold text-base">Editar Lançamento</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors text-xl leading-none">&times;</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-white font-semibold text-base">Editar lançamento</h3>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className={lbl}>Descrição</label>
+            <input className={inp} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} />
+          </div>
+          <div>
+            <label className={lbl}>Valor total (R$)</label>
+            <input type="number" step="0.01" className={inp} value={form.valor} onChange={(e) => set('valor', e.target.value)} />
+          </div>
+          <div>
+            <label className={lbl}>Valor fixo (R$)</label>
+            <input type="number" step="0.01" className={inp} value={form.valor_fixo} onChange={(e) => set('valor_fixo', e.target.value)} placeholder="Opcional" />
+          </div>
+          <div>
+            <label className={lbl}>Valor adicional (R$)</label>
+            <input type="number" step="0.01" className={inp} value={form.valor_adicional} onChange={(e) => set('valor_adicional', e.target.value)} />
+          </div>
+          <div>
+            <label className={lbl}>Motivo adicional</label>
+            <input className={inp} value={form.motivo_adicional} onChange={(e) => set('motivo_adicional', e.target.value)} placeholder="Ex: horas extras" />
+          </div>
+          <div>
+            <label className={lbl}>Competência</label>
+            <input type="date" className={inp} value={form.data_competencia} onChange={(e) => set('data_competencia', e.target.value)} />
+          </div>
+          <div>
+            <label className={lbl}>Data de pagamento</label>
+            <input type="date" className={inp} value={form.data_pagamento} onChange={(e) => set('data_pagamento', e.target.value)} />
+          </div>
+          <div>
+            <label className={lbl}>Forma de pagamento</label>
+            <select className={inp} value={form.forma_pagamento} onChange={(e) => set('forma_pagamento', e.target.value)}>
+              <option value="">Não informado</option>
+              {FORMAS_LIST.map((f) => <option key={f} value={f}>{FORMAS_PAGAMENTO_LABEL[f]}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={lbl}>Tipo de pagamento</label>
+            <select className={inp} value={form.tipo_pagamento} onChange={(e) => set('tipo_pagamento', e.target.value)}>
+              <option value="">Não informado</option>
+              {TIPOS_LIST.map((t) => <option key={t} value={t}>{TIPO_PAGAMENTO[t]}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className={lbl}>Observações</label>
+            <textarea rows={2} className={inp} value={form.observacoes} onChange={(e) => set('observacoes', e.target.value)} />
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="block text-xs text-gray-400 mb-1">Descrição</label>
-              <input
-                name="descricao"
-                defaultValue={lancamento.descricao}
-                required
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-              />
-            </div>
+        {err && <p className="text-red-400 text-sm">{err}</p>}
 
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Valor Total (R$)</label>
-              <input
-                name="valor"
-                type="number"
-                step="0.01"
-                min="0"
-                defaultValue={lancamento.valor}
-                required
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Competência</label>
-              <input
-                name="data_competencia"
-                type="date"
-                defaultValue={lancamento.data_competencia}
-                required
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-              />
-            </div>
-
-            {lancamento.valor_fixo != null && (
-              <>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Valor Fixo (R$)</label>
-                  <input
-                    name="valor_fixo"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={lancamento.valor_fixo ?? ""}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Adicional (R$)</label>
-                  <input
-                    name="valor_adicional"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    defaultValue={lancamento.valor_adicional ?? 0}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-xs text-gray-400 mb-1">Motivo do Adicional</label>
-                  <input
-                    name="motivo_adicional"
-                    defaultValue={lancamento.motivo_adicional ?? ""}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-              </>
-            )}
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Data de Pagamento</label>
-              <input
-                name="data_pagamento"
-                type="date"
-                defaultValue={lancamento.data_pagamento ?? ""}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Forma de Pagamento</label>
-              <select
-                name="forma_pagamento"
-                defaultValue={lancamento.forma_pagamento ?? ""}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-              >
-                <option value="">— Selecione —</option>
-                {Object.entries(FORMAS_PAGAMENTO_LABEL).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Tipo de Pagamento</label>
-              <select
-                name="tipo_pagamento"
-                defaultValue={lancamento.tipo_pagamento ?? ""}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-              >
-                <option value="">— Selecione —</option>
-                {Object.entries(TIPO_PAGAMENTO).map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="col-span-2">
-              <label className="block text-xs text-gray-400 mb-1">Observações</label>
-              <textarea
-                name="observacoes"
-                defaultValue={lancamento.observacoes ?? ""}
-                rows={2}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500 resize-none"
-              />
-            </div>
-          </div>
-
-          {err && <p className="text-red-400 text-xs">{err}</p>}
-
-          <div className="flex justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm text-white bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
-            >
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {saving ? "Salvando..." : "Salvar alterações"}
-            </button>
-          </div>
-        </form>
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+          >
+            {loading ? 'Salvando...' : 'Salvar alterações'}
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium py-2 rounded-lg transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -810,10 +757,11 @@ export default function HistoricoClient({ prestador, lancamentos: initialLancame
                         <td className="px-4 py-3">
                           <button
                             onClick={() => setEditando(l)}
-                            className="inline-flex items-center gap-1.5 text-xs text-yellow-400 hover:text-white bg-yellow-400/10 hover:bg-yellow-500/20 px-2.5 py-1.5 rounded-lg transition-colors border border-yellow-400/20"
                             title="Editar lançamento"
+                            className="inline-flex items-center gap-1.5 text-xs text-yellow-400 hover:text-white bg-yellow-400/10 hover:bg-yellow-500/20 border border-yellow-400/20 px-2.5 py-1.5 rounded-lg transition-colors"
                           >
-                            ✏️ Editar
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar
                           </button>
                         </td>
                       </tr>
