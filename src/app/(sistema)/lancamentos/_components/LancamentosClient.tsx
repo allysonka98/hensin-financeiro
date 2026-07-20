@@ -10,11 +10,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  Pencil,
 } from 'lucide-react'
 import {
   criarLancamento,
   marcarComoPago,
   excluirLancamento,
+  editarLancamento,
 } from '@/app/actions/lancamentos'
 import type { Lancamento } from '@/types'
 
@@ -489,12 +491,291 @@ function PagarForm({
   )
 }
 
+// ─── Editar Lançamento Form ───────────────────────────────────────────────────
+
+function EditarForm({
+  lancamento,
+  contasFixas,
+  prestadores,
+  onSuccess,
+  onCancel,
+}: {
+  lancamento: Lancamento
+  contasFixas: { id: string; nome: string }[]
+  prestadores: { id: string; nome: string }[]
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const [error, setError] = useState<string | undefined>()
+  const [isPending, startTransition] = useTransition()
+  const action = editarLancamento.bind(null, lancamento.id)
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(undefined)
+    const formData = new FormData(e.currentTarget)
+    startTransition(async () => {
+      const result = await action(undefined, formData)
+      if (result?.error) {
+        setError(result.error)
+      } else {
+        onSuccess()
+      }
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <input type="hidden" name="comprovante_url_atual" value={lancamento.comprovante_url ?? ''} />
+
+      {/* Tipo */}
+      <div>
+        <label className={LABEL}>
+          Tipo <span className="text-red-400">*</span>
+        </label>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="tipo"
+              value="receita"
+              required
+              defaultChecked={lancamento.tipo === 'receita'}
+              className="accent-green-500"
+            />
+            <span className="text-green-400 font-medium">Receita</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="radio"
+              name="tipo"
+              value="despesa"
+              defaultChecked={lancamento.tipo === 'despesa'}
+              className="accent-red-500"
+            />
+            <span className="text-red-400 font-medium">Despesa</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Descrição */}
+      <div>
+        <label htmlFor="e-desc" className={LABEL}>
+          Descrição <span className="text-red-400">*</span>
+        </label>
+        <input
+          id="e-desc"
+          name="descricao"
+          required
+          defaultValue={lancamento.descricao}
+          className={INPUT}
+        />
+      </div>
+
+      {/* Categoria + Valor */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="e-cat" className={LABEL}>
+            Categoria <span className="text-red-400">*</span>
+          </label>
+          <select
+            id="e-cat"
+            name="categoria"
+            required
+            defaultValue={lancamento.categoria}
+            className={INPUT}
+          >
+            <option value="" disabled>
+              Selecione
+            </option>
+            {Object.entries(CATEGORIAS).map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="e-valor" className={LABEL}>
+            Valor (R$) <span className="text-red-400">*</span>
+          </label>
+          <input
+            id="e-valor"
+            name="valor"
+            type="number"
+            required
+            min={0}
+            step="0.01"
+            defaultValue={lancamento.valor}
+            className={INPUT}
+          />
+        </div>
+      </div>
+
+      {/* Datas */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="e-comp" className={LABEL}>
+            Data competência <span className="text-red-400">*</span>
+          </label>
+          <input
+            id="e-comp"
+            name="data_competencia"
+            type="date"
+            required
+            defaultValue={lancamento.data_competencia}
+            className={INPUT}
+          />
+        </div>
+        <div>
+          <label htmlFor="e-pgto" className={LABEL}>
+            Data pagamento
+          </label>
+          <input
+            id="e-pgto"
+            name="data_pagamento"
+            type="date"
+            defaultValue={lancamento.data_pagamento ?? ''}
+            className={INPUT}
+          />
+        </div>
+      </div>
+
+      {/* Forma de pagamento */}
+      <div>
+        <label htmlFor="e-forma" className={LABEL}>
+          Forma de pagamento
+        </label>
+        <select
+          id="e-forma"
+          name="forma_pagamento"
+          defaultValue={lancamento.forma_pagamento ?? ''}
+          className={INPUT}
+        >
+          <option value="">Selecione (opcional)</option>
+          {Object.entries(FORMAS_PAGAMENTO).map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Conta fixa + Prestador */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="e-cf" className={LABEL}>
+            Conta fixa
+          </label>
+          <select
+            id="e-cf"
+            name="conta_fixa_id"
+            defaultValue={lancamento.conta_fixa_id ?? ''}
+            className={INPUT}
+          >
+            <option value="">Nenhuma</option>
+            {contasFixas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="e-pre" className={LABEL}>
+            Prestador
+          </label>
+          <select
+            id="e-pre"
+            name="prestador_id"
+            defaultValue={lancamento.prestador_id ?? ''}
+            className={INPUT}
+          >
+            <option value="">Nenhum</option>
+            {prestadores.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Observações */}
+      <div>
+        <label htmlFor="e-obs" className={LABEL}>
+          Observações
+        </label>
+        <textarea
+          id="e-obs"
+          name="observacoes"
+          rows={2}
+          defaultValue={lancamento.observacoes ?? ''}
+          className={`${INPUT} resize-none`}
+        />
+      </div>
+
+      {/* Comprovante */}
+      <div>
+        <label htmlFor="e-file" className={LABEL}>
+          Novo comprovante (substitui o atual)
+        </label>
+        {lancamento.comprovante_url && (
+          <p className="text-xs text-gray-500 mb-1">
+            Atual:{' '}
+            <a
+              href={lancamento.comprovante_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:underline"
+            >
+              ver arquivo
+            </a>
+          </p>
+        )}
+        <input
+          id="e-file"
+          name="comprovante"
+          type="file"
+          accept="image/*,.pdf"
+          className={FILE_INPUT}
+        />
+      </div>
+
+      {error && (
+        <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-2">
+          {error}
+        </p>
+      )}
+
+      <div className="flex gap-3 pt-2">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-medium py-2 rounded-lg transition-colors text-sm"
+        >
+          {isPending ? 'Salvando...' : 'Salvar alterações'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={isPending}
+          className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium py-2 rounded-lg transition-colors text-sm"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 type ModalState =
   | { type: 'closed' }
   | { type: 'criar' }
   | { type: 'pagar'; lancamento: Lancamento }
+  | { type: 'editar'; lancamento: Lancamento }
 
 interface Props {
   lancamentos: Lancamento[]
@@ -529,6 +810,11 @@ export default function LancamentosClient({
   function openPagar(l: Lancamento) {
     modalKey.current += 1
     setModal({ type: 'pagar', lancamento: l })
+  }
+
+  function openEditar(l: Lancamento) {
+    modalKey.current += 1
+    setModal({ type: 'editar', lancamento: l })
   }
 
   function closeModal() {
@@ -763,6 +1049,13 @@ export default function LancamentosClient({
                             </button>
                           )}
                           <button
+                            onClick={() => openEditar(l)}
+                            className="p-1.5 text-gray-400 hover:text-yellow-400 transition-colors rounded"
+                            title="Editar lançamento"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => handleDelete(l.id)}
                             disabled={isPendingDelete}
                             className="p-1.5 text-gray-400 hover:text-red-400 transition-colors rounded disabled:opacity-50"
@@ -818,12 +1111,24 @@ export default function LancamentosClient({
         <Modal
           key={modalKey.current}
           title={
-            modal.type === 'criar' ? 'Novo Lançamento' : 'Marcar como pago'
+            modal.type === 'criar'
+              ? 'Novo Lançamento'
+              : modal.type === 'editar'
+                ? 'Editar Lançamento'
+                : 'Marcar como pago'
           }
           onClose={closeModal}
         >
           {modal.type === 'criar' ? (
             <LancamentoForm
+              contasFixas={contasFixas}
+              prestadores={prestadores}
+              onSuccess={closeModal}
+              onCancel={closeModal}
+            />
+          ) : modal.type === 'editar' ? (
+            <EditarForm
+              lancamento={modal.lancamento}
               contasFixas={contasFixas}
               prestadores={prestadores}
               onSuccess={closeModal}
