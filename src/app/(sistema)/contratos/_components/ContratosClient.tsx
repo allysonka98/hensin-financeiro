@@ -7,7 +7,7 @@ import {
   atualizarContrato,
   excluirContrato,
 } from '@/app/actions/contratos'
-import type { ContratoComPrestador } from '../page'
+import type { ContratoComStatus } from '../page'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,11 @@ const STATUS_CONFIG: Record<
     label: 'Em negociação',
     cls: 'bg-blue-400/15 text-blue-400',
   },
+}
+
+const VENCIMENTO_CONFIG: Record<string, { label: string; cls: string }> = {
+  vencido: { label: 'Vencido', cls: 'bg-red-400/15 text-red-400' },
+  vence_em_breve: { label: 'Vence em breve', cls: 'bg-yellow-400/15 text-yellow-400' },
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -97,7 +102,7 @@ function ContratoForm({
   onSuccess,
   onCancel,
 }: {
-  contrato?: ContratoComPrestador | null
+  contrato?: ContratoComStatus | null
   prestadores: { id: string; nome: string }[]
   onSuccess: () => void
   onCancel: () => void
@@ -231,7 +236,7 @@ function ContratoForm({
         </div>
       </div>
 
-      {/* Data assinatura + Prestador responsável */}
+      {/* Data assinatura + Vencimento */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor="c-data" className={LABEL}>
@@ -247,23 +252,37 @@ function ContratoForm({
           />
         </div>
         <div>
-          <label htmlFor="c-prest" className={LABEL}>
-            Prestador responsável
+          <label htmlFor="c-vencimento" className={LABEL}>
+            Vencimento / renovação
           </label>
-          <select
-            id="c-prest"
-            name="prestador_responsavel_id"
-            defaultValue={contrato?.prestador_responsavel_id ?? ''}
+          <input
+            id="c-vencimento"
+            name="data_vencimento"
+            type="date"
+            defaultValue={contrato?.data_vencimento ?? ''}
             className={INPUT}
-          >
-            <option value="">Nenhum</option>
-            {prestadores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
+          />
         </div>
+      </div>
+
+      {/* Prestador responsável */}
+      <div>
+        <label htmlFor="c-prest" className={LABEL}>
+          Prestador responsável
+        </label>
+        <select
+          id="c-prest"
+          name="prestador_responsavel_id"
+          defaultValue={contrato?.prestador_responsavel_id ?? ''}
+          className={INPUT}
+        >
+          <option value="">Nenhum</option>
+          {prestadores.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.nome}
+            </option>
+          ))}
+        </select>
       </div>
 
       {error && (
@@ -302,10 +321,10 @@ function ContratoForm({
 type ModalState =
   | { type: 'closed' }
   | { type: 'criar' }
-  | { type: 'editar'; contrato: ContratoComPrestador }
+  | { type: 'editar'; contrato: ContratoComStatus }
 
 interface Props {
-  contratos: ContratoComPrestador[]
+  contratos: ContratoComStatus[]
   prestadores: { id: string; nome: string }[]
 }
 
@@ -322,7 +341,7 @@ export default function ContratosClient({ contratos, prestadores }: Props) {
     setModal({ type: 'criar' })
   }
 
-  function openEditar(c: ContratoComPrestador) {
+  function openEditar(c: ContratoComStatus) {
     modalKey.current += 1
     setModal({ type: 'editar', contrato: c })
   }
@@ -434,6 +453,7 @@ export default function ContratosClient({ contratos, prestadores }: Props) {
                     'Valor',
                     'Honorários',
                     'Assinatura',
+                    'Vencimento',
                     'Responsável',
                     'Status',
                     '',
@@ -443,7 +463,7 @@ export default function ContratosClient({ contratos, prestadores }: Props) {
                       className={`text-xs font-medium text-gray-400 uppercase tracking-wider px-4 py-3 ${
                         i === 2 || i === 3
                           ? 'text-right'
-                          : i === 6
+                          : i === 7
                             ? 'text-center'
                             : 'text-left'
                       }`}
@@ -458,7 +478,7 @@ export default function ContratosClient({ contratos, prestadores }: Props) {
                 {filtrados.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="text-center text-gray-500 py-10 text-sm"
                     >
                       Nenhum contrato encontrado para os filtros selecionados.
@@ -494,6 +514,22 @@ export default function ContratosClient({ contratos, prestadores }: Props) {
                         </td>
                         <td className="px-4 py-3 text-gray-300 text-sm whitespace-nowrap">
                           {fmtDate(c.data_assinatura)}
+                        </td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          {c.data_vencimento ? (
+                            <>
+                              <p className="text-gray-300">{fmtDate(c.data_vencimento)}</p>
+                              {c.vencimento_status && VENCIMENTO_CONFIG[c.vencimento_status] && (
+                                <span
+                                  className={`inline-flex mt-0.5 px-2 py-0.5 rounded-full text-xs font-medium ${VENCIMENTO_CONFIG[c.vencimento_status].cls}`}
+                                >
+                                  {VENCIMENTO_CONFIG[c.vencimento_status].label}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-300 text-sm">
                           {c.prestador_responsavel?.nome ?? '—'}
@@ -547,7 +583,7 @@ export default function ContratosClient({ contratos, prestadores }: Props) {
                     <td className="px-4 py-3 text-right text-blue-400 text-sm font-semibold whitespace-nowrap">
                       {fmt(totalHonorarios)}
                     </td>
-                    <td colSpan={4} />
+                    <td colSpan={5} />
                   </tr>
                 </tfoot>
               )}

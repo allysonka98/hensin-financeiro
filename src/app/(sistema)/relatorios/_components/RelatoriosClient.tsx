@@ -1,7 +1,9 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { fmtCategoria } from '@/lib/utils'
+import MesNav from '@/components/MesNav'
 
 interface Lancamento {
   id: string
@@ -13,25 +15,77 @@ interface Lancamento {
   data_pagamento: string | null
   status: string
   forma_pagamento: string | null
+  prestador_id: string | null
+  prestador: { id: string; nome: string } | null
 }
 
 interface Props {
   lancamentos: Lancamento[]
   mesAno: string
+  periodo: string
   historico?: unknown[]
 }
 
 const fmt = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
-export default function RelatoriosClient({ lancamentos, mesAno }: Props) {
+function csvField(v: string | number): string {
+  const s = String(v)
+  return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function csvNum(v: number): string {
+  return v.toFixed(2).replace('.', ',')
+}
+
+function downloadCSV(filename: string, linhas: string[]) {
+  // BOM no início garante acentuação correta ao abrir no Excel
+  const BOM = String.fromCharCode(0xfeff)
+  const blob = new Blob([BOM + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export default function RelatoriosClient({ lancamentos, mesAno, periodo }: Props) {
   const receitas = lancamentos.filter(l => l.tipo === 'receita')
   const despesas = lancamentos.filter(l => l.tipo === 'despesa')
   const totalReceitas = receitas.reduce((s, l) => s + l.valor, 0)
   const totalDespesas = despesas.reduce((s, l) => s + l.valor, 0)
   const resultado = totalReceitas - totalDespesas
 
+  const [view, setView] = useState<'financeiro' | 'prestadores'>('financeiro')
   const [loadingWord, setLoadingWord] = useState(false)
+
+  const porPrestador = useMemo(() => {
+    const map = new Map<
+      string,
+      { id: string; nome: string; totalPago: number; totalPendente: number; qtdPagamentos: number }
+    >()
+    lancamentos.forEach(l => {
+      if (!l.prestador_id || !l.prestador) return
+      const entry = map.get(l.prestador_id) ?? {
+        id: l.prestador_id,
+        nome: l.prestador.nome,
+        totalPago: 0,
+        totalPendente: 0,
+        qtdPagamentos: 0,
+      }
+      if (l.status === 'pago') {
+        entry.totalPago += l.valor
+        entry.qtdPagamentos += 1
+      } else if (l.status === 'pendente') {
+        entry.totalPendente += l.valor
+      }
+      map.set(l.prestador_id, entry)
+    })
+    return Array.from(map.values()).sort((a, b) => b.totalPago - a.totalPago)
+  }, [lancamentos])
 
   const exportWord = useCallback(async () => {
     setLoadingWord(true)
@@ -132,6 +186,41 @@ export default function RelatoriosClient({ lancamentos, mesAno }: Props) {
       setLoadingWord(false)
     }
   }, [lancamentos, mesAno, totalReceitas, totalDespesas, resultado])
+
+  const exportCSV = useCallback(() => {
+    const linhas = [
+      ['Data', 'Descrição', 'Categoria', 'Tipo', 'Valor', 'Status'].map(csvField).join(';'),
+      ...lancamentos.map(l =>
+        [
+          l.data_competencia?.slice(0, 10) ?? '',
+          l.descricao ?? '',
+          fmtCategoria(l.categoria ?? ''),
+          l.tipo === 'receita' ? 'Receita' : 'Despesa',
+          csvNum(l.valor),
+          l.status,
+        ]
+          .map(csvField)
+          .join(';')
+      ),
+      '',
+      ['Total Receitas', '', '', '', csvNum(totalReceitas), ''].map(csvField).join(';'),
+      ['Total Despesas', '', '', '', csvNum(totalDespesas), ''].map(csvField).join(';'),
+      ['Resultado', '', '', '', csvNum(resultado), ''].map(csvField).join(';'),
+    ]
+    downloadCSV(`relatorio-${mesAno.toLowerCase().replace(/\s/g, '-')}.csv`, linhas)
+  }, [lancamentos, mesAno, totalReceitas, totalDespesas, resultado])
+
+  const exportPrestadoresCSV = useCallback(() => {
+    const linhas = [
+      ['Prestador', 'Pagamentos', 'Total pago', 'Pendente'].map(csvField).join(';'),
+      ...porPrestador.map(p =>
+        [p.nome, String(p.qtdPagamentos), csvNum(p.totalPago), csvNum(p.totalPendente)]
+          .map(csvField)
+          .join(';')
+      ),
+    ]
+    downloadCSV(`relatorio-prestadores-${mesAno.toLowerCase().replace(/\s/g, '-')}.csv`, linhas)
+  }, [porPrestador, mesAno])
 
   const exportPDF = useCallback(async () => {
     const { jsPDF } = await import('jspdf')
@@ -241,28 +330,74 @@ export default function RelatoriosClient({ lancamentos, mesAno }: Props) {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Relatórios</h1>
           <p className="text-gray-400 text-sm mt-1">{mesAno}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={exportWord}
-            disabled={loadingWord}
-            className="bg-gray-700 hover:bg-gray-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
-          >
-            {loadingWord ? '⏳' : '📄'} Exportar Word
-          </button>
-          <button
-            onClick={exportPDF}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
-          >
-            ⬇ Exportar PDF
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <MesNav periodo={periodo} basePath="/relatorios" />
+          {view === 'financeiro' ? (
+            <>
+              <button
+                onClick={exportCSV}
+                disabled={lancamentos.length === 0}
+                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+              >
+                📊 Exportar CSV
+              </button>
+              <button
+                onClick={exportWord}
+                disabled={loadingWord}
+                className="bg-gray-700 hover:bg-gray-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+              >
+                {loadingWord ? '⏳' : '📄'} Exportar Word
+              </button>
+              <button
+                onClick={exportPDF}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+              >
+                ⬇ Exportar PDF
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={exportPrestadoresCSV}
+              disabled={porPrestador.length === 0}
+              className="bg-gray-700 hover:bg-gray-600 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors flex items-center gap-2"
+            >
+              📊 Exportar CSV
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Abas */}
+      <div className="flex gap-2 border-b border-gray-700">
+        <button
+          onClick={() => setView('financeiro')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            view === 'financeiro'
+              ? 'border-blue-500 text-white'
+              : 'border-transparent text-gray-400 hover:text-white'
+          }`}
+        >
+          Financeiro
+        </button>
+        <button
+          onClick={() => setView('prestadores')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            view === 'prestadores'
+              ? 'border-blue-500 text-white'
+              : 'border-transparent text-gray-400 hover:text-white'
+          }`}
+        >
+          Por Prestador
+        </button>
+      </div>
+
+      {view === 'financeiro' && (
+        <>
       {/* DRE */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-3">DRE — {mesAno}</h2>
@@ -338,6 +473,79 @@ export default function RelatoriosClient({ lancamentos, mesAno }: Props) {
           </table>
         </div>
       </div>
+        </>
+      )}
+
+      {view === 'prestadores' && (
+        <div>
+          <h2 className="text-lg font-semibold text-white mb-3">
+            Pagamentos por prestador{' '}
+            <span className="text-gray-400 font-normal text-sm">
+              ({porPrestador.length} prestador{porPrestador.length !== 1 ? 'es' : ''})
+            </span>
+          </h2>
+          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-700 bg-gray-900">
+                  <th className="text-left px-4 py-3 text-gray-400 font-medium">Prestador</th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">Pagamentos</th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">Total pago</th>
+                  <th className="text-right px-4 py-3 text-gray-400 font-medium">Pendente</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {porPrestador.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-8 text-gray-500">
+                      Nenhum pagamento a prestadores no período.
+                    </td>
+                  </tr>
+                ) : (
+                  porPrestador.map(p => (
+                    <tr key={p.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                      <td className="px-4 py-3 text-white">{p.nome}</td>
+                      <td className="px-4 py-3 text-right text-gray-300">{p.qtdPagamentos}</td>
+                      <td className="px-4 py-3 text-right font-medium text-green-400">
+                        {fmt(p.totalPago)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-yellow-400">
+                        {p.totalPendente > 0 ? fmt(p.totalPendente) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/prestadores/${p.id}`}
+                          className="text-blue-400 hover:text-blue-300 text-xs font-medium"
+                        >
+                          Ver histórico completo
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {porPrestador.length > 0 && (
+                <tfoot>
+                  <tr className="bg-gray-900 border-t border-gray-700">
+                    <td className="px-4 py-3 text-gray-400 font-medium">Total</td>
+                    <td className="px-4 py-3 text-right text-gray-300 font-medium">
+                      {porPrestador.reduce((s, p) => s + p.qtdPagamentos, 0)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-green-400">
+                      {fmt(porPrestador.reduce((s, p) => s + p.totalPago, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-yellow-400">
+                      {fmt(porPrestador.reduce((s, p) => s + p.totalPendente, 0))}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

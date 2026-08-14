@@ -20,6 +20,7 @@ export async function criarContrato(
     valor: Number(formData.get('valor')),
     honorarios: Number(formData.get('honorarios')),
     data_assinatura: formData.get('data_assinatura') as string,
+    data_vencimento: (formData.get('data_vencimento') as string) || null,
     status: (formData.get('status') as ContratoStatus) || 'ativo',
     prestador_responsavel_id:
       (formData.get('prestador_responsavel_id') as string) || null,
@@ -47,6 +48,7 @@ export async function atualizarContrato(
       valor: Number(formData.get('valor')),
       honorarios: Number(formData.get('honorarios')),
       data_assinatura: formData.get('data_assinatura') as string,
+      data_vencimento: (formData.get('data_vencimento') as string) || null,
       status: formData.get('status') as ContratoStatus,
       prestador_responsavel_id:
         (formData.get('prestador_responsavel_id') as string) || null,

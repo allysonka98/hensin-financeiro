@@ -1,10 +1,18 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function criarLancamentosAutomaticos(): Promise<void> {
-  const supabase = await createClient()
+  // Roda em segundo plano via `after()` (fora do caminho de render do dashboard),
+  // por isso usa o client admin: dentro de `after()` não é possível ler cookies.
+  const supabase = createAdminClient()
+  if (!supabase) {
+    console.warn(
+      'criarLancamentosAutomaticos: SUPABASE_SERVICE_ROLE_KEY não configurada, geração automática ignorada.'
+    )
+    return
+  }
 
   const now = new Date()
   const ano = now.getFullYear()

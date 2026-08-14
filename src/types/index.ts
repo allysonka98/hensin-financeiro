@@ -121,6 +121,7 @@ export interface Contrato {
   valor: number
   honorarios: number
   data_assinatura: string
+  data_vencimento: string | null
   status: ContratoStatus
   prestador_responsavel_id: string | null
   created_at: string

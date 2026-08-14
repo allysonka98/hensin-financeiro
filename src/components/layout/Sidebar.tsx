@@ -28,10 +28,19 @@ const navItems = [
 
 interface Props {
   contasVencendoBadge?: number
+  contratosVencendoBadge?: number
 }
 
-export default function Sidebar({ contasVencendoBadge = 0 }: Props) {
+export default function Sidebar({
+  contasVencendoBadge = 0,
+  contratosVencendoBadge = 0,
+}: Props) {
   const pathname = usePathname()
+
+  const badges: Record<string, number> = {
+    '/contas-fixas': contasVencendoBadge,
+    '/contratos': contratosVencendoBadge,
+  }
 
   return (
     <aside className="w-64 min-h-screen bg-gray-900 border-r border-gray-800 flex flex-col shrink-0">
@@ -44,7 +53,8 @@ export default function Sidebar({ contasVencendoBadge = 0 }: Props) {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map(({ href, label, icon: Icon }) => {
           const isActive = pathname === href || pathname.startsWith(href + '/')
-          const showBadge = href === '/contas-fixas' && contasVencendoBadge > 0
+          const badgeCount = badges[href] ?? 0
+          const showBadge = badgeCount > 0
           return (
             <Link
               key={href}
@@ -59,7 +69,7 @@ export default function Sidebar({ contasVencendoBadge = 0 }: Props) {
               {label}
               {showBadge && (
                 <span className="ml-auto bg-red-500 text-white text-xs font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1">
-                  {contasVencendoBadge > 9 ? '9+' : contasVencendoBadge}
+                  {badgeCount > 9 ? '9+' : badgeCount}
                 </span>
               )}
             </Link>
